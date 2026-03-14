@@ -30,11 +30,11 @@ function fixDate(d: string): string {
 
 // ─── Data source configuration ────────────────────────────────────────────────
 
-// Google Sheet ID (from the spreadsheet URL)
-const SHEET_ID = "1DG-xLRM9wnNccXowsMqlbcxbSAScQAez3FeuH1MN3xw";
-
-// Read-only: Google Visualization API — CORS-enabled, no auth required for public sheets
-const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+// All reads go through the api-server (/api/experiments), which fetches from
+// Google Sheets server-to-server — no browser session cookies involved, so
+// every user always receives the same shared dataset regardless of which
+// Google account they are logged into in their browser.
+const EXPERIMENTS_URL = "/api/experiments";
 
 // Write/delete: Google Apps Script Web App URL.
 // Deploy google-apps-script.js as a Web App in your Google Sheet
@@ -44,52 +44,40 @@ const APPS_SCRIPT_URL = "";
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
+interface RawExperiment {
+  id: number;
+  model: string;
+  dataset: string;
+  accuracy: number;
+  notes: string;
+  date: string;
+}
+
 async function fetchExperiments(): Promise<Experiment[]> {
-  const res = await fetch(GVIZ_URL);
-  if (!res.ok) throw new Error(`Failed to fetch data (HTTP ${res.status})`);
-  const text = await res.text();
-
-  // gviz response is JSONP-wrapped: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
-  let json: Record<string, unknown>;
-  try {
-    json = JSON.parse(text.replace(/^[^(]*\(/, "").replace(/\);\s*$/, ""));
-  } catch {
-    throw new Error("Unexpected response format from Google Sheets");
-  }
-
-  if (json.status === "error") {
-    const msg =
-      (json.errors as Array<{ message: string }> | undefined)?.[0]?.message ??
-      "Google Sheets API error";
+  const res = await fetch(EXPERIMENTS_URL);
+  if (!res.ok) {
+    let msg = `Failed to fetch experiments (HTTP ${res.status})`;
+    try {
+      const errJson = (await res.json()) as { error?: string };
+      if (errJson.error) msg = errJson.error;
+    } catch {}
     throw new Error(msg);
   }
 
-  const table = json.table as {
-    cols: Array<{ label: string }>;
-    rows: Array<{ c: Array<{ v: unknown; f?: string } | null> }> | null;
-  };
+  const rows = (await res.json()) as RawExperiment[];
 
-  const headers = table.cols.map((c) => c.label.toLowerCase().trim());
-  const col = (name: string) => headers.indexOf(name);
-
-  return (table.rows ?? []).map((row, idx) => {
-    const cells = row.c ?? [];
-    const val = (name: string): unknown => cells[col(name)]?.v ?? "";
-    const fmt = (name: string): string =>
-      String(cells[col(name)]?.f ?? cells[col(name)]?.v ?? "");
-
-    const rawModel = String(val("model"));
-    const rawDataset = String(val("dataset"));
-
+  return rows.map((row) => {
+    const rawModel = String(row.model ?? "");
+    const rawDataset = String(row.dataset ?? "");
     return {
-      id: idx + 2, // actual sheet row number: row 1 = header, data starts at row 2
+      id: row.id,
       model: rawModel,
       dataset: rawDataset,
       modelNorm: rawModel.trim().toLowerCase(),
       datasetNorm: rawDataset.trim().toLowerCase(),
-      accuracy: Number(val("accuracy")) || 0,
-      notes: String(val("notes")),
-      date: fmt("date") || String(val("date")),
+      accuracy: Number(row.accuracy) || 0,
+      notes: String(row.notes ?? ""),
+      date: String(row.date ?? ""),
     };
   });
 }
