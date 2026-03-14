@@ -1,0 +1,62 @@
+I have a bug in my application that needs to be fixed.
+
+Problem description:
+
+After adding a new data entry to the dataset, all existing data on the page disappears. The application should keep the existing data visible and simply append the new entry.
+
+Currently, after the bug happened, the data is still not visible in the app.
+
+Important context about the system:
+
+- All users share the same dataset.
+- Every user is allowed to add or delete experiments from the same dataset.
+- This is NOT a per-user dataset. Everyone should see the same data.
+- Any user can add or remove data, and the changes should be reflected in the UI immediately.
+
+There is also another issue in the "Experiments" section:
+When clicking the trash icon, the experiment should:
+1. Be deleted from the dataset/data source
+2. Immediately disappear from the UI
+
+Possible causes to investigate:
+
+1. The frontend state might be getting overwritten when adding a new experiment instead of appending it.
+   Example of a potential issue:
+   setExperiments(newExperiment)
+
+   Instead it should append:
+   setExperiments(prev => [...prev, newExperiment])
+
+2. The API might be returning only the newly created entry instead of the full dataset after a POST request.
+
+3. The UI state might be resetting after an add operation.
+
+4. There might be an ID collision where new entries overwrite existing ones.
+
+5. The dataset synchronization between frontend and backend might be broken.
+
+Tasks:
+
+1. Analyze the application and find the root cause of why all data disappears after adding a new entry.
+2. Fix the logic so that:
+   - Existing data is preserved
+   - New entries are appended correctly
+   - The dataset remains visible after updates.
+3. Fix the delete functionality in the "Experiments" section so that clicking the trash icon:
+   - Removes the entry from the dataset
+   - Removes the entry from the UI immediately.
+4. Ensure the frontend state stays synchronized with the dataset after add and delete operations.
+
+Important constraints:
+
+- Do NOT modify unrelated parts of the application.
+- Do NOT refactor the whole project.
+- Only make minimal code changes necessary to fix the bug.
+- Do NOT introduce new features.
+- Do NOT create new bugs or break existing functionality.
+
+Verification after fixing:
+
+- Adding a new experiment should NOT remove existing data.
+- Deleting an experiment should remove it from both the dataset and the UI.
+- The dataset should remain visible and consistent for all users.
