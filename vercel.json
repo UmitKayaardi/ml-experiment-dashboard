@@ -1,0 +1,5 @@
+{
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @workspace/ml-tracker run build",
+  "outputDirectory": "artifacts/ml-tracker/dist/public"
+}
