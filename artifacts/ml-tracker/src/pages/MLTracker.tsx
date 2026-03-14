@@ -123,13 +123,13 @@ function AutocompleteInput({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  console.log("SUGGESTIONS COMING IN:", suggestions);
+  // Deduplicate and trim original values, then filter by current input
+  const uniqueSuggestions = Array.from(
+    new Set(suggestions.map((s) => s.trim())),
+  ).filter(Boolean);
 
-  const normalized = suggestions.map((s) => s.trim());
-  const uniqueSuggestions = Array.from(new Set(normalized));
-
-  const filtered = uniqueSuggestions.filter((s) =>
-    s.toLowerCase().includes(value.toLowerCase()),
+  const filtered = uniqueSuggestions.filter(
+    (s) => s.toLowerCase().includes(value.toLowerCase()) && s !== value.trim(),
   );
 
   // Close dropdown when clicking outside the component entirely
