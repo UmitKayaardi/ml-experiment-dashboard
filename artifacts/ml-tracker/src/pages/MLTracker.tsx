@@ -35,7 +35,15 @@ const API_URL =
 
 async function fetchExperiments(): Promise<Experiment[]> {
   const res = await fetch(API_URL);
-  if (!res.ok) throw new Error("Failed to fetch experiments");
+  if (!res.ok) {
+    let msg = `Failed to fetch experiments (HTTP ${res.status})`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.message) msg = errJson.message;
+      else if (errJson?.error) msg = String(errJson.error);
+    } catch {}
+    throw new Error(msg);
+  }
   const json = await res.json();
   const rows: Record<string, unknown>[] = Array.isArray(json)
     ? json
@@ -629,6 +637,8 @@ export default function MLTracker() {
             </h2>
             {loading ? (
               <p className="loading-text">Loading…</p>
+            ) : error && experiments.length === 0 ? (
+              <p className="msg msg-error">{error}</p>
             ) : sorted.length === 0 ? (
               <p className="empty-text">
                 {search
