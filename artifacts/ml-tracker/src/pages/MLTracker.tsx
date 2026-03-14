@@ -28,61 +28,104 @@ function fixDate(d: string): string {
   return d;
 }
 
+// ─── Data source configuration ────────────────────────────────────────────────
+
+// Google Sheet ID (from the spreadsheet URL)
+const SHEET_ID = "1DG-xLRM9wnNccXowsMqlbcxbSAScQAez3FeuH1MN3xw";
+
+// Read-only: Google Visualization API — CORS-enabled, no auth required for public sheets
+const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+
+// Write/delete: Google Apps Script Web App URL.
+// Deploy google-apps-script.js as a Web App in your Google Sheet
+// (Extensions → Apps Script → Deploy → New deployment → Web App)
+// then paste the URL here:
+const APPS_SCRIPT_URL = "";
+
 // ─── API helpers ──────────────────────────────────────────────────────────────
 
-const API_URL =
-  "https://api.sheetninja.io/af76519ee08c4190942fcd7efe5038e1/mlExperimentTracker/sayfa1";
-
 async function fetchExperiments(): Promise<Experiment[]> {
-  const res = await fetch(API_URL);
-  if (!res.ok) {
-    let msg = `Failed to fetch experiments (HTTP ${res.status})`;
-    try {
-      const errJson = await res.json();
-      if (errJson?.message) msg = errJson.message;
-      else if (errJson?.error) msg = String(errJson.error);
-    } catch {}
+  const res = await fetch(GVIZ_URL);
+  if (!res.ok) throw new Error(`Failed to fetch data (HTTP ${res.status})`);
+  const text = await res.text();
+
+  // gviz response is JSONP-wrapped: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(text.replace(/^[^(]*\(/, "").replace(/\);\s*$/, ""));
+  } catch {
+    throw new Error("Unexpected response format from Google Sheets");
+  }
+
+  if (json.status === "error") {
+    const msg =
+      (json.errors as Array<{ message: string }> | undefined)?.[0]?.message ??
+      "Google Sheets API error";
     throw new Error(msg);
   }
-  const json = await res.json();
-  const rows: Record<string, unknown>[] = Array.isArray(json)
-    ? json
-    : (json.data ?? json.rows ?? []);
 
-  return rows.map((row) => {
-    const rawModel = String(row.model ?? "");
-    const rawDataset = String(row.dataset ?? "");
+  const table = json.table as {
+    cols: Array<{ label: string }>;
+    rows: Array<{ c: Array<{ v: unknown; f?: string } | null> }> | null;
+  };
+
+  const headers = table.cols.map((c) => c.label.toLowerCase().trim());
+  const col = (name: string) => headers.indexOf(name);
+
+  return (table.rows ?? []).map((row, idx) => {
+    const cells = row.c ?? [];
+    const val = (name: string): unknown => cells[col(name)]?.v ?? "";
+    const fmt = (name: string): string =>
+      String(cells[col(name)]?.f ?? cells[col(name)]?.v ?? "");
+
+    const rawModel = String(val("model"));
+    const rawDataset = String(val("dataset"));
 
     return {
-      id: row.id as string | number | undefined,
-
-      // UI'da görünen orijinal değer
+      id: idx + 2, // actual sheet row number: row 1 = header, data starts at row 2
       model: rawModel,
       dataset: rawDataset,
-
-      // Filtreleme için normalize edilmiş değer
       modelNorm: rawModel.trim().toLowerCase(),
       datasetNorm: rawDataset.trim().toLowerCase(),
-
-      accuracy: Number(row.accuracy ?? 0),
-      notes: String(row.notes ?? ""),
-      date: String(row.date ?? ""),
+      accuracy: Number(val("accuracy")) || 0,
+      notes: String(val("notes")),
+      date: fmt("date") || String(val("date")),
     };
   });
 }
 
 async function addExperiment(exp: Omit<Experiment, "id">): Promise<void> {
+  if (!APPS_SCRIPT_URL) {
+    throw new Error(
+      "Write operations require a Google Apps Script Web App. " +
+        "Deploy google-apps-script.js and set APPS_SCRIPT_URL in MLTracker.tsx.",
+    );
+  }
   const { model, dataset, accuracy, notes, date } = exp;
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, dataset, accuracy, notes, date }),
+  const params = new URLSearchParams({
+    action: "add",
+    model,
+    dataset,
+    accuracy: String(accuracy),
+    notes,
+    date,
   });
+  const res = await fetch(`${APPS_SCRIPT_URL}?${params}`);
   if (!res.ok) throw new Error("Failed to add experiment");
 }
 
 async function deleteExperiment(id: string | number): Promise<void> {
-  const res = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+  if (!APPS_SCRIPT_URL) {
+    throw new Error(
+      "Write operations require a Google Apps Script Web App. " +
+        "Deploy google-apps-script.js and set APPS_SCRIPT_URL in MLTracker.tsx.",
+    );
+  }
+  const params = new URLSearchParams({
+    action: "delete",
+    rowIndex: String(id),
+  });
+  const res = await fetch(`${APPS_SCRIPT_URL}?${params}`);
   if (!res.ok) throw new Error("Failed to delete experiment");
 }
 
