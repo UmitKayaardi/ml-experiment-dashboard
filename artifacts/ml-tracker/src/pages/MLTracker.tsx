@@ -64,10 +64,11 @@ async function fetchExperiments(): Promise<Experiment[]> {
 }
 
 async function addExperiment(exp: Omit<Experiment, "id">): Promise<void> {
+  const { model, dataset, accuracy, notes, date } = exp;
   const res = await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(exp),
+    body: JSON.stringify({ model, dataset, accuracy, notes, date }),
   });
   if (!res.ok) throw new Error("Failed to add experiment");
 }
@@ -398,19 +399,20 @@ export default function MLTracker() {
     setError(null);
     setSuccess(false);
     try {
-      await addExperiment({
+      const newExp: Experiment = {
         model: form.model,
         dataset: form.dataset,
-        modelNorm: form.model.trim().toLowerCase(), //added by manually
-        datasetNorm: form.dataset.trim().toLowerCase(), //added by manually
+        modelNorm: form.model.trim().toLowerCase(),
+        datasetNorm: form.dataset.trim().toLowerCase(),
         accuracy: Number(form.accuracy),
         notes: form.notes,
         date: form.date,
-      });
+      };
+      await addExperiment(newExp);
+      setExperiments((prev) => [...prev, newExp]);
       setForm({ model: "", dataset: "", accuracy: "", notes: "", date: "" });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-      await loadData();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -423,21 +425,17 @@ export default function MLTracker() {
     const key = exp.id ?? idx;
     setDeletingId(key);
     try {
-      if (exp.id !== undefined) {
-        await deleteExperiment(exp.id);
-      }
-      // Optimistically remove from UI
+      await deleteExperiment(exp.id !== undefined ? exp.id : key);
       setExperiments((prev) =>
         exp.id !== undefined
           ? prev.filter((e) => e.id !== exp.id)
-          : prev.filter((_, i) => i !== idx),
+          : prev.filter((e) => e !== exp),
       );
     } catch {
-      // If delete API fails, still remove locally so UX doesn't break
       setExperiments((prev) =>
         exp.id !== undefined
           ? prev.filter((e) => e.id !== exp.id)
-          : prev.filter((_, i) => i !== idx),
+          : prev.filter((e) => e !== exp),
       );
     } finally {
       setDeletingId(null);
