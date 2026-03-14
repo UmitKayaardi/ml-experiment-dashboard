@@ -1,0 +1,51 @@
+I am experiencing a bug in my application:
+
+Problem:
+- The dataset is only visible for my account. Other users logging in see an empty dataset.
+- The application uses a shared Google Sheets dataset.
+- All users should see the same dataset, and everyone should be able to add or delete experiments.
+- The data is currently visible for me, but not for other accounts.
+
+Dataset link:
+https://docs.google.com/spreadsheets/d/1DG-xLRM9wnNccXowsMqlbcxbSAScQAez3FeuH1MN3xw/edit?usp=sharing
+Note: I have already set the Google Sheet so that anyone with the link can view/read it.
+
+Tasks:
+
+1. Check frontend code:
+   - Look for any user-based filters, e.g., filtering experiments by `currentUser.id` or `session.user.email`.
+   - Check if local state, localStorage, or sessionStorage is used and could prevent other users from seeing data.
+
+2. Check backend/API:
+   - Verify if API calls are user-scoped, e.g., filtering dataset by user ID or email.
+   - Ensure all users fetch the full dataset, not just data associated with one user.
+
+3. Check Google Sheets connection:
+   - Verify spreadsheet ID, sheet name, and range used in code.
+   - Ensure the application is using the correct API or public endpoint.
+   - Confirm there are no permission issues for other users.
+
+4. Check auth and session handling:
+   - Make sure that login state or auth guards do not prevent other users from fetching data.
+   - Confirm that all users can fetch the dataset even if their session differs.
+
+5. Check fetch and network requests:
+   - Inspect fetch requests for different users to ensure responses return the full dataset.
+   - Identify any CORS, 403/500, or other network errors.
+
+6. Ensure that adding or deleting experiments updates:
+   - The shared dataset in Google Sheets
+   - The UI immediately for all users
+
+Constraints:
+
+- Do NOT refactor the whole application.
+- Do NOT change unrelated features.
+- Only fix or adjust code necessary to ensure all users see the shared dataset correctly.
+- Do not introduce new bugs.
+
+Verification after fixing:
+
+- Multiple users can see the same dataset.
+- Adding new experiments appends data without deleting existing entries.
+- Deleting experiments removes them from both the dataset and the UI for all users.
